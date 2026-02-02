@@ -3,33 +3,62 @@ import { useState, useEffect } from 'react';
 import api from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { 
-  CheckCircle, Clock, PackageCheck,
-  User, CreditCard, ArrowLeft, Loader2, AlertCircle
+  CheckCircle, PackageCheck, User, 
+  ArrowLeft, Loader2, AlertCircle
 } from 'lucide-react';
 import Link from 'next/link';
 
+// Interfaces para melhorar a segurança do código
+interface ProdutoItem {
+  produtoId: { nome: string };
+  quantidade: number;
+  precoUnitario: number;
+}
+
+interface Pedido {
+  _id: string;
+  status: string;
+  usuarioId?: { nome: string };
+  createdAt: string;
+  valorTotal: number;
+  produtos: ProdutoItem[];
+}
+
 export default function GestaoPedidos() {
-  const [pedidos, setPedidos] = useState([]);
+  const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [carregando, setCarregando] = useState(true);
+  const [autorizado, setAutorizado] = useState(false);
   const [processandoId, setProcessandoId] = useState<string | null>(null);
   const router = useRouter();
 
-  // Função para obter cabeçalho de autenticação
+  // Helper para buscar o token de forma segura
   const getAuthHeader = () => {
-    const user = JSON.parse(localStorage.getItem('usuario') || '{}');
-    return {
-      headers: { Authorization: `Bearer ${user.token}` }
-    };
+    try {
+      const user = JSON.parse(localStorage.getItem('usuario') || '{}');
+      return {
+        headers: { Authorization: `Bearer ${user?.token}` }
+      };
+    } catch {
+      return { headers: { Authorization: '' } };
+    }
   };
 
   useEffect(() => {
-    // PROTEÇÃO DE ROTA
-    const user = JSON.parse(localStorage.getItem('usuario') || '{}');
-    if (!user.isAdmin) {
-      router.push('/');
-      return;
-    }
-    carregarPedidos();
+    const verificarAcesso = () => {
+      try {
+        const user = JSON.parse(localStorage.getItem('usuario') || '{}');
+        if (!user || !user.isAdmin) {
+          router.push('/');
+        } else {
+          setAutorizado(true);
+          carregarPedidos();
+        }
+      } catch (err) {
+        router.push('/');
+      }
+    };
+
+    verificarAcesso();
   }, [router]);
 
   const carregarPedidos = async () => {
@@ -44,14 +73,13 @@ export default function GestaoPedidos() {
   };
 
   const validarPagamento = async (id: string) => {
-    if (confirm("Confirmas que o valor deste pedido já entrou na conta?")) {
+    if (window.confirm("Confirmas que o valor deste pedido já entrou na conta?")) {
       setProcessandoId(id);
       try {
-        // Passando o status e os headers de admin
         await api.put(`/orders/status/${id}`, { status: 'finalizado' }, getAuthHeader());
-        carregarPedidos(); 
+        await carregarPedidos(); // Atualiza a lista
       } catch (err) {
-        alert("Erro ao validar pagamento. Verifique a conexão com o servidor.");
+        alert("Erro ao validar pagamento. Verifique a permissão de administrador.");
       } finally {
         setProcessandoId(null);
       }
@@ -59,14 +87,20 @@ export default function GestaoPedidos() {
   };
 
   const formatarMoeda = (valor: number) => {
-    return valor.toLocaleString('pt-AO', { style: 'currency', currency: 'AOA' }).replace('AOA', 'Kz');
+    return valor.toLocaleString('pt-AO', { 
+      style: 'currency', 
+      currency: 'AOA' 
+    }).replace('AOA', 'Kz');
   };
 
-  if (carregando) {
+  // Enquanto verifica o Admin ou carrega dados
+  if (!autorizado || carregando) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
         <Loader2 className="animate-spin text-blue-700 mb-4" size={40} />
-        <p className="font-black text-xs uppercase tracking-widest text-slate-400">Sincronizando Pedidos...</p>
+        <p className="font-black text-xs uppercase tracking-widest text-slate-400">
+          Sincronizando Pedidos...
+        </p>
       </div>
     );
   }
@@ -80,13 +114,17 @@ export default function GestaoPedidos() {
             <Link href="/admin" className="flex items-center gap-2 text-slate-400 font-bold text-xs uppercase tracking-widest mb-2 hover:text-blue-600 transition-colors">
               <ArrowLeft size={16} /> Voltar ao Painel
             </Link>
-            <h1 className="text-4xl font-black text-slate-900 tracking-tighter italic">Validação de Compras<span className="text-blue-700">.</span></h1>
+            <h1 className="text-4xl font-black text-slate-900 tracking-tighter italic">
+              Validação de Compras<span className="text-blue-700">.</span>
+            </h1>
             <p className="text-slate-500 font-medium">Controle de entradas financeiras.</p>
           </div>
           
           <div className="bg-white px-6 py-3 rounded-2xl border border-slate-200 shadow-sm">
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total em Fila</p>
-            <p className="text-xl font-black text-slate-900">{pedidos.filter((p:any) => p.status !== 'finalizado').length} Pendentes</p>
+            <p className="text-xl font-black text-slate-900">
+              {pedidos.filter(p => p.status !== 'finalizado').length} Pendentes
+            </p>
           </div>
         </header>
 
@@ -94,14 +132,16 @@ export default function GestaoPedidos() {
           {pedidos.length === 0 ? (
             <div className="bg-white p-20 rounded-[3rem] text-center border border-dashed border-slate-200">
               <PackageCheck size={64} className="mx-auto text-slate-200 mb-4" />
-              <p className="text-slate-500 font-bold uppercase tracking-widest">Nenhuma encomenda registada.</p>
+              <p className="text-slate-500 font-bold uppercase tracking-widest">Nenhuma encomenda registrada.</p>
             </div>
           ) : (
-            pedidos.map((pedido: any) => (
+            pedidos.map((pedido) => (
               <div 
                 key={pedido._id} 
                 className={`bg-white rounded-[2.5rem] border-2 transition-all overflow-hidden ${
-                  pedido.status === 'finalizado' ? 'border-transparent shadow-sm opacity-70' : 'border-blue-100 shadow-xl shadow-blue-50/50'
+                  pedido.status === 'finalizado' 
+                    ? 'border-transparent shadow-sm opacity-70' 
+                    : 'border-blue-100 shadow-xl shadow-blue-50/50'
                 }`}
               >
                 <div className="p-8 flex flex-col lg:flex-row justify-between gap-8">
@@ -128,8 +168,8 @@ export default function GestaoPedidos() {
                     </div>
 
                     <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100 space-y-3">
-                        {pedido.produtos && Array.isArray(pedido.produtos) ? (
-                          pedido.produtos.map((item: any, idx: number) => (
+                        {pedido.produtos && pedido.produtos.length > 0 ? (
+                          pedido.produtos.map((item, idx) => (
                             <div key={idx} className="flex justify-between text-xs font-bold text-slate-600 italic border-b border-slate-200 pb-2 last:border-0">
                               <span>{item.produtoId?.nome || "Item Indisponível"} <span className="text-blue-600 ml-2">x{item.quantidade}</span></span>
                               <span className="text-slate-900">{formatarMoeda(item.precoUnitario * item.quantidade)}</span>
@@ -137,7 +177,7 @@ export default function GestaoPedidos() {
                           ))
                         ) : (
                           <div className="flex items-center gap-2 text-amber-500 text-xs font-bold italic">
-                            <AlertCircle size={14} /> Falha ao carregar itens do carrinho.
+                            <AlertCircle size={14} /> Detalhes dos itens indisponíveis.
                           </div>
                         )}
                     </div>

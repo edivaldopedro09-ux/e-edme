@@ -4,10 +4,20 @@ import api from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { 
   PackagePlus, LayoutDashboard, Trash2, RefreshCcw, 
-  Box, ClipboardList, Users, Settings, 
-  ArrowUpRight, ShoppingCart, LogOut, Edit3, XCircle, UploadCloud, ChevronDown
+  Box, ClipboardList, ArrowUpRight, ShoppingCart, LogOut, Edit3, XCircle, UploadCloud, ChevronDown
 } from 'lucide-react';
 import Link from 'next/link';
+
+// Definição de interface para o Produto
+interface Produto {
+  _id: string;
+  nome: string;
+  preco: number;
+  descricao: string;
+  imagemUrl: string;
+  categoria?: string;
+  estoque: number;
+}
 
 export default function AdminPage() {
   const [nome, setNome] = useState('');
@@ -18,8 +28,8 @@ export default function AdminPage() {
   const [estoque, setEstoque] = useState('');
   
   const [editandoId, setEditandoId] = useState<string | null>(null);
-  const [produtos, setProdutos] = useState([]);
-  const [mensagem, setMensagem] = useState({ tipo: '', text: '' });
+  const [produtos, setProdutos] = useState<Produto[]>([]);
+  const [mensagem, setMensagem] = useState<{ tipo: 'sucesso' | 'erro' | '', text: string }>({ tipo: '', text: '' });
   const [estatisticas, setEstatisticas] = useState({ totalProdutos: 0, totalVendas: 0 });
   
   const router = useRouter();
@@ -44,10 +54,13 @@ export default function AdminPage() {
   };
 
   const getAuthHeader = () => {
-    const user = JSON.parse(localStorage.getItem('usuario') || '{}');
-    return {
-      headers: { Authorization: `Bearer ${user.token}` }
-    };
+    if (typeof window !== 'undefined') {
+      const user = JSON.parse(localStorage.getItem('usuario') || '{}');
+      return {
+        headers: { Authorization: `Bearer ${user.token}` }
+      };
+    }
+    return { headers: { Authorization: '' } };
   };
 
   useEffect(() => {
@@ -65,11 +78,11 @@ export default function AdminPage() {
       setProdutos(res.data);
       setEstatisticas(prev => ({ ...prev, totalProdutos: res.data.length }));
     } catch (err) {
-      console.error("Erro ao carregar produtos");
+      console.error("Erro ao carregar produtos", err);
     }
   };
 
-  const prepararEdicao = (p: any) => {
+  const prepararEdicao = (p: Produto) => {
     setEditandoId(p._id);
     setNome(p.nome);
     setPreco(p.preco.toString());
@@ -132,6 +145,7 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
+      {/* SIDEBAR */}
       <aside className="w-72 bg-slate-900 text-white p-6 hidden lg:flex flex-col sticky top-0 h-screen shadow-2xl">
         <div className="mb-10 flex items-center gap-3">
           <div className="bg-blue-600 p-2 rounded-xl italic font-black text-xl">E</div>
@@ -182,7 +196,6 @@ export default function AdminPage() {
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-10">
-          {/* FORMULÁRIO */}
           <section className="xl:col-span-5 bg-white p-8 rounded-[2.5rem] shadow-xl border border-white h-fit">
             <h3 className="text-xl font-black text-slate-800 mb-8 flex items-center gap-2">
               {editandoId ? <Edit3 className="text-amber-500" /> : <PackagePlus className="text-blue-600" />}
@@ -192,21 +205,20 @@ export default function AdminPage() {
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Nome do Item</label>
-                <input type="text" value={nome} onChange={(e) => setNome(e.target.value)} required className="w-full p-4 bg-slate-50 rounded-2xl outline-none focus:ring-2 focus:ring-blue-600 transition font-medium" />
+                <input type="text" value={nome} onChange={(e) => setNome(e.target.value)} required className="w-full p-4 bg-slate-50 rounded-2xl outline-none focus:ring-2 focus:ring-blue-600 transition font-medium text-slate-900" />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Preço (Kz)</label>
-                  <input type="number" value={preco} onChange={(e) => setPreco(e.target.value)} required className="w-full p-4 bg-slate-50 rounded-2xl outline-none focus:ring-2 focus:ring-blue-600 transition font-medium" />
+                  <input type="number" value={preco} onChange={(e) => setPreco(e.target.value)} required className="w-full p-4 bg-slate-50 rounded-2xl outline-none focus:ring-2 focus:ring-blue-600 transition font-medium text-slate-900" />
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Qtd. Stock</label>
-                  <input type="number" value={estoque} onChange={(e) => setEstoque(e.target.value)} required className="w-full p-4 bg-slate-50 rounded-2xl outline-none focus:ring-2 focus:ring-blue-600 transition font-medium" />
+                  <input type="number" value={estoque} onChange={(e) => setEstoque(e.target.value)} required className="w-full p-4 bg-slate-50 rounded-2xl outline-none focus:ring-2 focus:ring-blue-600 transition font-medium text-slate-900" />
                 </div>
               </div>
 
-              {/* SELECT DE CATEGORIA */}
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Categoria</label>
                 <div className="relative">
@@ -214,7 +226,7 @@ export default function AdminPage() {
                     value={categoria} 
                     onChange={(e) => setCategoria(e.target.value)} 
                     required
-                    className="w-full p-4 bg-slate-50 rounded-2xl outline-none focus:ring-2 focus:ring-blue-600 transition font-medium appearance-none cursor-pointer"
+                    className="w-full p-4 bg-slate-50 rounded-2xl outline-none focus:ring-2 focus:ring-blue-600 transition font-medium appearance-none cursor-pointer text-slate-900"
                   >
                     <option value="" disabled>Escolha uma categoria...</option>
                     {categoriasPredefinidas.map(cat => (
@@ -225,7 +237,6 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              {/* UPLOAD IMAGEM */}
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Foto do Produto</label>
                 <div className="relative border-2 border-dashed border-slate-200 rounded-2xl p-6 flex flex-col items-center justify-center gap-2 hover:bg-slate-50 hover:border-blue-400 transition-all cursor-pointer overflow-hidden">
@@ -246,7 +257,7 @@ export default function AdminPage() {
 
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Descrição</label>
-                <textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} required rows={2} className="w-full p-4 bg-slate-50 rounded-2xl outline-none focus:ring-2 focus:ring-blue-600 transition resize-none font-medium"></textarea>
+                <textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} required rows={2} className="w-full p-4 bg-slate-50 rounded-2xl outline-none focus:ring-2 focus:ring-blue-600 transition resize-none font-medium text-slate-900"></textarea>
               </div>
 
               <button type="submit" className={`w-full text-white py-5 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-all ${editandoId ? 'bg-amber-500' : 'bg-slate-900 hover:bg-blue-600'}`}>
@@ -255,12 +266,10 @@ export default function AdminPage() {
             </form>
           </section>
 
-          {/* LISTA */}
           <section className="xl:col-span-7 space-y-6">
             <h3 className="text-xl font-black text-slate-800 flex items-center gap-2"><RefreshCcw className="text-blue-600" /> Inventário Geral</h3>
-            
             <div className="space-y-4 max-h-[800px] overflow-y-auto pr-2 custom-scrollbar">
-              {produtos.map((p: any) => (
+              {produtos.map((p) => (
                 <div key={p._id} className={`flex items-center justify-between p-4 bg-white rounded-[1.5rem] border transition-all ${editandoId === p._id ? 'border-amber-400 shadow-lg' : 'border-slate-100'}`}>
                   <div className="flex items-center gap-4">
                     <img src={p.imagemUrl} alt={p.nome} className="w-14 h-14 object-cover rounded-xl shadow-sm" />

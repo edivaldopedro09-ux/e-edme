@@ -1,13 +1,22 @@
 'use client';
 import { useCart } from '@/context/CartContext';
-import { Trash2, MessageCircle, ArrowLeft, ShoppingBag, Truck, CreditCard, ShieldCheck, Loader2 } from 'lucide-react';
+import { Trash2, MessageCircle, ArrowLeft, ShoppingBag, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import api from '@/lib/api';
 
 export default function CarrinhoPage() {
-  const { cart, removeFromCart, cartTotal, clearCart } = useCart();
+  const cartContext = useCart();
+  
+  // CORREÇÃO AQUI: 'as any[]' impede o erro de "type never" no build
+  const { 
+    cart = [] as any[], 
+    removeFromCart = () => {}, 
+    cartTotal = 0, 
+    clearCart = () => {} 
+  } = cartContext || {};
+
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
@@ -30,25 +39,23 @@ export default function CarrinhoPage() {
     setLoading(true);
 
     try {
-      // CORREÇÃO: Enviando os dados conforme o seu Model do Backend
       const payload = {
         usuarioId: usuario.id || usuario._id,
-        produtos: cart.map(item => ({
+        // CORREÇÃO AQUI: Tipagem explícita (item: any) para o map
+        produtos: cart.map((item: any) => ({
           produtoId: item._id,
           quantidade: item.quantity,
           precoUnitario: item.preco
         })),
         valorTotal: cartTotal,
-        endereco: { localidade: "Luanda", nota: "Pedido via Web" }, // Campo obrigatório no seu Model
+        endereco: { localidade: "Luanda", nota: "Pedido via Web" },
         status: 'pendente'
       };
 
-      // Tenta salvar no banco. Se der 404, verifique se o server.js tem app.use('/api/orders', orderRoutes)
       const response = await api.post('/orders/create', payload);
       const pedidoId = response.data._id;
 
-      // Montagem da Mensagem para o WhatsApp
-      const listaProdutos = cart.map(item => 
+      const listaProdutos = cart.map((item: any) => 
         `• *${item.nome}* (Qtd: ${item.quantity}) - ${formatarMoeda(item.preco * item.quantity)}`
       ).join('%0A');
 
@@ -65,9 +72,8 @@ export default function CarrinhoPage() {
       
     } catch (err: any) {
       console.error("Erro no Checkout:", err);
-      // Se o erro for 404, avisar especificamente sobre a rota
       if (err.response?.status === 404) {
-        alert("Erro 404: A rota de pedidos não foi encontrada no servidor. Verifique o seu Backend.");
+        alert("Erro 404: A rota de pedidos não foi encontrada no servidor.");
       } else {
         alert("Erro ao processar o seu pedido. Tente novamente.");
       }
